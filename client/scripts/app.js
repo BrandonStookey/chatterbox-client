@@ -1,13 +1,12 @@
 var app = {
-
   server: "https://api.parse.com/1/classes/chatterbox/",
   username: window.location.search.substr(10),
   // default room which shows messages from all rooms
   room: 'all',
   // used to filter out room repeats in populateRoomList method
   roomList: {},
-  // when usernames are clicked they get pushed to the friends array
-  friends: [],
+  // when usernames are clicked they get inserted into the friends array
+  friends: {},
 
   init: function() {},
 
@@ -41,6 +40,9 @@ var app = {
           $('.chat').empty();
           // new messages will be appended to the .chat div
           _.each(data.results, function(message) {
+            if (app.friends[message.username] === message.username) {
+              message.friend = true;
+            }
             app.addMessage(message);
             });
         },
@@ -63,6 +65,9 @@ var app = {
         success: function (data){
           $('.chat').empty();
           _.each(data.results, function(message) {
+            if (app.friends[message.username] === message.username) {
+              message.friend = true;
+            }
             app.addMessage(message);
           });
         },
@@ -90,14 +95,18 @@ var app = {
     var date = timeStamp.getDate();
     var month = ' ' + (timeStamp.getMonth() + 1) + '/';
     var time = timeStamp.toLocaleTimeString();
-    $(".chat").append('<div class="messages"><a href="#" class="username">' + message.username + '</a> ' + month + date + ' at ' + time + '<br>' + message.text + '</div>');
+    if (message.friend) {
+      $(".chat").append('<div class="messages"><a href="#" class="username">' + message.username + '</a> ' + month + date + ' at ' + time + '<br><strong>' + message.text + '</strong></div>');
+    } else {
+      $(".chat").append('<div class="messages"><a href="#" class="username">' + message.username + '</a> ' + month + date + ' at ' + time + '<br>' + message.text + '</div>');
+    }
   },
 
   addRoom: function(roomName){
     $("#roomSelect").append('<option>' + roomName + '</option>');
   },
 
-  // called when page is first loaded on line 177 and fills room dropdown menu
+  // called when page is first loaded on line 192 and fills room dropdown menu
   populateRoomList: function() {
     $.ajax({ 
       type: 'GET', 
@@ -120,15 +129,19 @@ var app = {
           }
         });
       },
-      error: function(response) {
+      error: function(response){
         console.log("chatterbox: Failed to fetch messages:", response);
       }
     });
   },
 
   addFriend: function(name){
-    app.friends.push(name);
+    if (!app.friends[name]) {
+      app.friends[name] = name;
+      $(".friends").append('<div>' + name + '</div>');
+    }
   },
+
 
   handleSubmit: function(message){
     app.send(message);
@@ -165,10 +178,11 @@ $(document).ready(function() {
     $('input.roomField').val("");
   });
 
-//SELECT ROOM BUTTON
+  //SELECT ROOM BUTTON
   $("select").change(function() {
     $('.chat').empty();
     app.room = $(this).val();
+    // not sure if code below is working as intended but it's working so ha!
     clearInterval(interval1);
     interval1 = setInterval(function() {
       app.fetch(app.room);
@@ -177,6 +191,9 @@ $(document).ready(function() {
 
   app.populateRoomList();
 
+  // not sure if storing setInterval function in interval1 makes a diff
+  // but without storing it and clearing it above (line 185), there would be
+  // two setIntervals running when switching to a new room
   var interval1 = setInterval(function() {
     app.fetch();
   }, 3000);
