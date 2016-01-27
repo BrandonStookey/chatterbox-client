@@ -1,9 +1,12 @@
-// YOUR CODE HERE:
 var app = {
+
   server: "https://api.parse.com/1/classes/chatterbox/",
-  username: window.location.search.substr(10) || "anonymous",
-  room: 'lobby',
+  username: window.location.search.substr(10),
+  // default room which shows messages from all rooms
+  room: 'all',
+  // used to filter out room repeats in populateRoomList method
   roomList: {},
+  // when usernames are clicked they get pushed to the friends array
   friends: [],
 
   init: function() {},
@@ -24,7 +27,7 @@ var app = {
   },
 
   fetch: function(roomName){
-    if (roomName === undefined) {
+    if (roomName === undefined || app.room === 'all') {
       $.ajax({ 
         type: 'GET', 
         url: app.server, 
@@ -34,7 +37,9 @@ var app = {
         },
         dataType: 'json',
         success: function (data){
+          // fetch will be called in setInterval so on each call the chats will be cleared
           $('.chat').empty();
+          // new messages will be appended to the .chat div
           _.each(data.results, function(message) {
             app.addMessage(message);
             });
@@ -43,11 +48,13 @@ var app = {
           console.log("chatterbox: Failed to fetch messages:", response);
         }
       });
+      // if fetch is invoked with a roomName parameter
     } else {
       $.ajax({ 
         type: 'GET', 
         url: app.server, 
         data: {
+          // query parse.com for messages with a matching roomname key ONLY
           where: JSON.stringify({roomname: roomName}),
           order: '-createdAt',
           limit: 20
@@ -71,10 +78,14 @@ var app = {
   },
 
   addMessage: function(message){
+    // html escaping
     message.text = escape(message.text) || escape(message.message);
+    // clean up escaped chars before appending
+    // downside is no numbers will be displayed in chat
     if (message.text.match(/%|[0-9]+/)) {
       message.text = message.text.replace(/%|[0-9]+/g, ' ');
     }
+    // timestamp formatting
     var timeStamp = new Date(message.createdAt);
     var date = timeStamp.getDate();
     var month = ' ' + (timeStamp.getMonth() + 1) + '/';
@@ -86,12 +97,39 @@ var app = {
     $("#roomSelect").append('<option>' + roomName + '</option>');
   },
 
+  // called when page is first loaded on line 177 and fills room dropdown menu
+  populateRoomList: function() {
+    $.ajax({ 
+      type: 'GET', 
+      url: app.server, 
+      // without limit set, default is 100 message objects retrieved
+      data: {
+        order: '-createdAt',
+      },
+      dataType: 'json',
+      success: function (data){
+        var room;
+        _.each(data.results, function(msgObj) {
+          room = msgObj.roomname;
+          // if room hasn't already been added to list
+          if (!app.roomList[room]) {
+            // it's added and marked
+            app.roomList[room] = true;
+            // then appended to list
+            app.addRoom(room);
+          }
+        });
+      },
+      error: function(response) {
+        console.log("chatterbox: Failed to fetch messages:", response);
+      }
+    });
+  },
+
   addFriend: function(name){
-    // $("#roomSelect").append('<option>' + roomName + '</option>')
-    // $('.messages').css({color:'red'}).appendTo(.username);
     app.friends.push(name);
   },
-  //this is our message form that allows users to submit message and prepend it to the page
+
   handleSubmit: function(message){
     app.send(message);
   }
@@ -136,6 +174,8 @@ $(document).ready(function() {
       app.fetch(app.room);
     }, 3000);
   });
+
+  app.populateRoomList();
 
   var interval1 = setInterval(function() {
     app.fetch();
